@@ -27,7 +27,7 @@ welcome to Guangdong, i hope you have a great travel.
 welcome to Beijing, i hope you have a great travel.
 ```
 
-![benchmark 圖片](./benchmark-1.jpg) {.section-image}
+![benchmark 圖片](./public/benchmark-1.jpg) {.section-image}
 
 ---
 
@@ -83,7 +83,7 @@ welcome to Beijing, i hope you have a great travel.
   }
 ```
 
-![11-1 相同的前置節點跟後置節點.png](./11-1-F.jpg){.fix-dark}
+![11-1 相同的前置節點跟後置節點.png](./public/11-1-F.jpg){.fix-dark}
 
 </div>
 
@@ -135,7 +135,7 @@ img{
   }
 ```
 
-![11-1 相同的前置節點跟後置節點.png](./11-1-F.jpg){.fix-dark}
+![11-1 相同的前置節點跟後置節點.png](./public/11-1-F.jpg){.fix-dark}
 
 </div>
 
