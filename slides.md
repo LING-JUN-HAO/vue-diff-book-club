@@ -35,8 +35,8 @@ welcome to Beijing, i hope you have a great travel.
 
 <v-clicks every="1" depth="2">
 
-1. 前置節點對比：從頭開始比對相同的節點
-2. 後置節點對比：從尾端開始比對相同的節點
+1. 前置節點比對：從頭開始比對相同的節點，決定 j 索引位置。
+2. 後置節點比對：從尾端開始比對相同的節點，決定 oldEnd 和 newEnd 索引位置。
 3. 純新增處理：處理只有新增節點的情況
 4. 純刪除處理：處理只有刪除節點的情況
 5. 複雜場景處理：當存在節點移動時，使用 diff 演算法
@@ -83,7 +83,7 @@ welcome to Beijing, i hope you have a great travel.
   }
 ```
 
-![11-1 相同的前置節點跟後置節點.png](./public/11-1-F.jpg){.fix-dark}
+![11-1 相同的前置節點.png](./public/11-1-F.jpg){.fix-dark}
 
 </div>
 
@@ -135,7 +135,101 @@ img{
   }
 ```
 
-![11-1 相同的前置節點跟後置節點.png](./public/11-1-F.jpg){.fix-dark}
+![11-2 相同的後置節點.png](./public/11-1-B.jpg){.fix-dark}
+
+</div>
+
+<style scoped>
+.slidev-layout p:has(> img){
+  text-align: center;
+  width: 50%;
+}
+
+.slidev-code-wrapper{
+  width: 50%;
+  overflow: auto;
+}
+
+img{
+  object-fit: contain;
+}
+</style>
+
+---
+
+# 處理純新增節點的情形
+
+1. **j > oldEnd**：代表預處理過程已處理完全部的舊子節點
+2. **newEnd ≥ j**：代表新子節點中，有未被處理的子節點需要掛載
+
+<div class="flex overflow-hidden gap-4">
+
+```ts
+function patchKeyedChildren(n1, n2, container) {
+  const newChildren = n2.children
+  const oldChildren = n1.children
+  // 省略前置節點及後置節點的處理
+  // 純新增節點條件
+  if (j > oldEnd && j <= newEnd) {
+        // 錨點索引
+        const anchorIndex = newEnd + 1
+        // 錨點元素
+        const anchor = anchorIndex < newChildren.length ? newChildren[anchorIndex].el : null
+        // 使用 while 循環，調用 patch 逐個掛載節點
+        while (j <= newEnd) {
+          patch(null, newChildren[j++], container, anchor)
+        }
+  }
+}
+```
+
+![11-1 純新增情形.png](./public/11-1-create.jpg){.fix-dark}
+
+</div>
+
+<style scoped>
+.slidev-layout p:has(> img){
+  text-align: center;
+  width: 50%;
+}
+
+.slidev-code-wrapper{
+  width: 50%;
+  overflow: auto;
+}
+
+img{
+  object-fit: contain;
+}
+</style>
+
+---
+
+# 處理純刪除節點的情形
+
+1. **j > newEnd**：代表預處理過程已處理完全部的新子節點
+2. **oldEnd ≥ j**：代表舊子節點中，有需要被卸載處理的子節點
+
+<div class="flex overflow-hidden gap-4">
+
+```ts
+  function patchKeyedChildren(n1, n2, container) {
+    const newChildren = n2.children
+    const oldChildren = n1.children
+    // 省略前置節點及後置節點的處理
+    // 純移除節點條件
+		if (j > oldEnd && j <= newEnd) {
+			// 新增節點
+		}else if(j > newEnd && j <= oldEnd){
+			// 卸載節點
+			while( j <= oldEnd){
+				unmount(oldChildren[j++])
+			}
+		}
+  }
+```
+
+![11-1 純新增情形.png](./public/11-1-delete.jpg){.fix-dark}
 
 </div>
 
