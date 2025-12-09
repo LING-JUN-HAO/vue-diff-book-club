@@ -30,6 +30,7 @@ p {
 }
 
 .slidev-layout h1 + p {
+  line-height: 1.75;
   opacity: 1;
   margin: 0;
 }

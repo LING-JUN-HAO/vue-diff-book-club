@@ -40,8 +40,8 @@ welcome to Beijing, i hope you have a great travel.
 3. 純新增處理：處理只有新增節點的情況
 4. 純刪除處理：處理只有刪除節點的情況
 5. 複雜場景處理：當存在節點移動時，使用 diff 演算法
-    - 建立 key → index 映射表
-    - 遍歷舊節點建立 source 映射關係
+    - 建立 key → index 映射表，判斷節點是否可以復用
+    - 遍歷舊節點建立 source 映射關係 & 判斷節點是否需要移動
     - 掛載新節點 & 透過最長遞增子序列最小化移動操作
 
 </v-clicks>
@@ -313,24 +313,24 @@ function patchKeyedChildren(n1, n2, container) {
 <div class="flex overflow-hidden gap-4">
 
 ```ts
-  function patchKeyedChildren(n1, n2, container) {
-    // 省略前置節點及後置節點的處理
-		if (j > oldEnd && j <= newEnd) {
-			// 舊子節點比較完，僅需處理掛載節點
-		}else if(j > newEnd && j <= oldEnd){
-			// 新子節點比較完，僅需處理需卸載節點
-		}else{
-			// 中段 diff 比較處理區域
+function patchKeyedChildren(n1, n2, container) {
+  // 省略前置節點及後置節點的處理
+  if (j > oldEnd && j <= newEnd) {
+    // 舊子節點比較完，僅需處理掛載節點
+  }else if(j > newEnd && j <= oldEnd){
+    // 新子節點比較完，僅需處理需卸載節點
+  }else{
+      // 中段 diff 比較處理區域
 
       // == 新增 source 陣列建立映射關係(預設填滿 -1) ==
       const count = newEnd - j + 1
-		  const source = new Array(count)
-		  source.fill(-1)
-       // == 新增 source 陣列建立映射關係 ==
+      const source = new Array(count)
+      source.fill(-1)
+        // == 新增 source 陣列建立映射關係 ==
 
-		  const oldStart = j
-		  const newStart = j
-		
+      const oldStart = j
+      const newStart = j
+    
       const keyIndex = new Map()
 
       for (let i = newStart; i <= newEnd; i++) {
@@ -358,3 +358,241 @@ function patchKeyedChildren(n1, n2, container) {
 </div>
 
 > source 陣列：記錄新子節點對應的舊子節點索引位置（若無對應則為 -1）
+
+---
+
+# source 陣列應用 - 舊子節點卸載
+
+- **找不到對應新節點**：遍歷舊子節點時，若某個舊節點在新節點中找不到匹配的 key，表示該節點需要被卸載。
+- **已復用數量達到上限**：當已複用的節點數達到新子節點總數時，表示所有需要的節點都已找到，剩餘的舊節點都是多餘的，應直接卸載。
+
+<div class="flex overflow-hidden gap-4">
+
+```ts
+function patchKeyedChildren(n1, n2, container) {
+  // 省略前置節點及後置節點的處理
+  if (j > oldEnd && j <= newEnd) {
+    // 舊子節點比較完,僅需處理掛載節點
+  } else if (j > newEnd && j <= oldEnd) {
+    // 新子節點比較完,僅需處理需卸載節點
+  } else {
+    const count = newEnd - newStart + 1
+    const source = new Array(count)
+    source.fill(-1)
+    
+    const oldStart = j
+    const newStart = j
+
+    // ★ patched 用於記錄已複用的節點數量
+    let patched = 0
+    
+    const keyIndex = new Map()
+    for (let i = newStart; i <= newEnd; i++) {
+      keyIndex.set(newChildren[i].key, i)
+    }
+    
+    for (let i = oldStart; i <= oldEnd; i++) {
+      const oldVNode = oldChildren[i]
+      
+      // ★ 檢查：是否還有新節點需要匹配
+      if (patched < count) {
+        const k = keyIndex.get(oldVNode.key)
+        
+        if (k !== undefined) {
+          const newVNode = newChildren[k]
+          patch(oldVNode, newVNode, container)
+          patched++
+          source[k - newStart] = i
+        } else {
+          // ★ 舊節點在新節點中找不到對應，需卸載
+          unMount(oldVNode)
+        }
+      } else {
+        // ★ 所有新節點都已處理完畢，剩餘的舊節點為多餘節點，直接卸載
+        unMount(oldVNode)
+      }
+    }
+  }
+}
+```
+
+![source 陣列紀錄新舊節點位置映射關係](./public/11-2-2.jpg)
+
+</div>
+
+> - Source 陣列長度是中段區域新子節點的數量(newEnd - newStart + 1)
+> - Source 陣列紀錄的索引是中段區域的新子節點在舊子節點陣列中的位置(k - newStart)
+
+---
+
+#  中段 diff 處理流程 2 - 判斷節點是否需要移動
+
+在處理節點移動前，需要先判斷是否存在需要移動的節點。若存在，則使用「最長遞增子序列(LIS)」演算法來優化移動操作，減少 DOM 操作次數。
+
+<div class="flex overflow-hidden gap-4">
+
+```ts
+function patchKeyedChildren(n1, n2, container) {
+  // 省略前置節點及後置節點的處理
+  if (j > oldEnd && j <= newEnd) {
+    // 舊子節點比較完,僅需處理掛載節點
+  } else if (j > newEnd && j <= oldEnd) {
+    // 新子節點比較完,僅需處理需卸載節點
+  } else {
+    const count = newEnd - newStart + 1
+    const source = new Array(count)
+    source.fill(-1)
+    
+    const oldStart = j
+    const newStart = j
+    let moved = false
+    let pos = 0
+    let patched = 0
+    
+    const keyIndex = new Map()
+    for (let i = newStart; i <= newEnd; i++) {
+      keyIndex.set(newChildren[i].key, i)
+    }
+    
+    for (let i = oldStart; i <= oldEnd; i++) {
+      const oldVNode = oldChildren[i]
+      
+      if (patched < count) {
+        const k = keyIndex.get(oldVNode.key)
+        
+        if (typeof k !== undefined) {
+          const newVNode = newChildren[k]
+          patch(oldVNode, newVNode, container)
+          patched++
+          source[k - newStart] = i
+          
+          // ★ 判斷是否需要移動(跟簡單 diff 方法一樣，透過是否保持遞增性來判斷)
+          if (k < pos) {
+            moved = true
+          } else {
+            pos = k
+          }
+        } else {
+          unMount(oldVNode)
+        }
+      } else {
+        unMount(oldVNode)
+      }
+    }
+  }
+}
+```
+
+![source 陣列紀錄新舊節點位置映射關係](./public/11-2-2.jpg)
+
+</div>
+
+---
+
+# 中段 diff 處理流程到目前為止存在的問題
+
+前面已經完成舊子節點的處理：複用可複用的節點、卸載多餘的節點，並判斷是否需要移動
+
+但如果有全新的節點需要新增呢？
+
+**考慮以下情境：**
+
+
+<div class="flex overflow-hidden gap-4">
+
+
+![新子節點掛載的情形](./public/11-3-1.jpg)
+
+<div class="flex flex-col gap-3">
+
+  <v-click>  
+
+  **當前情況不符合以下兩個原則**
+  - j 沒有大於 newEnd，不屬於純刪除
+  - j 沒有大於 oldEnd，不屬於純新增
+
+  </v-click>
+
+  <v-click>  
+
+  **當我們處理完前面的步驟後：**
+  - p-1 節點在前置比對中複用，位置不變
+  - p-2 節點在中段處理中複用，索引遞增，不需移動
+
+  </v-click>
+
+  <v-click>  
+
+  **★ 但我們遺漏了 p-3 節點！**
+
+  </v-click>
+</div>
+
+</div>
+
+<style>
+
+.slidev-layout p:has(> img){
+  margin: auto;
+}
+
+</style>
+
+---
+
+# 中段 diff 處理流程 3 - 掛載新節點
+
+當遍歷新子節點的中段 diff 區域時，若 source 陣列中對應位置為 **-1**，代表該節點是全新的，需要執行掛載操作
+
+<div class="flex overflow-hidden gap-4">
+
+```ts
+function patchKeyedChildren(n1, n2, container) {
+  // 省略前置節點及後置節點的處理
+  if (j > oldEnd && j <= newEnd) {
+    // 舊子節點比較完,僅需處理掛載節點
+  } else if (j > newEnd && j <= oldEnd) {
+    // 新子節點比較完,僅需處理需卸載節點
+  } else {
+    const count = newEnd - newStart + 1
+    const source = new Array(count)
+    source.fill(-1)
+    
+    const oldStart = j
+    const newStart = j
+    let moved = false
+    let pos = 0
+    let patched = 0
+    
+    const keyIndex = new Map()
+    for (let i = newStart; i <= newEnd; i++) {
+      keyIndex.set(newChildren[i].key, i)
+    }
+    
+    // 遍歷舊節點建立 source 映射關係 & 判斷節點是否需要移動
+    for (let i = oldStart; i <= oldEnd; i++) {...}
+
+    // 從後向前遍歷（只需要一次循環）
+		for (let i = count - 1; i >= 0; i--) {
+		  const pos = newStart + i
+		  const newVNode = newChildren[pos]
+		  const nextPos = pos + 1
+		  const anchor = nextPos < newChildren.length 
+		    ? newChildren[nextPos].el 
+		    : null
+		  
+		  if (source[i] === -1) {
+		    // 新增節點
+		    patch(null, newVNode, container, anchor)
+		  }
+    }
+  }
+}
+```
+
+![新子節點掛載的情形](./public/11-3-1.jpg)
+
+</div>
+
+> anchor 是 null，將 p-3 插入新子節點陣列的最後面
+
