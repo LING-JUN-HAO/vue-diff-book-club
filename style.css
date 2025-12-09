@@ -6,6 +6,22 @@ img {
   height: 100%;
 }
 
+p {
+  line-height: 1.75;
+}
+
+.slidev-layout h1 {
+  margin: 0;
+}
+
+.slidev-layout ol li + li {
+  margin-top: 0.75rem;
+}
+
+.slidev-layout ol li ul {
+  margin-top: 0.75rem;
+}
+
 .slidev-layout {
   display: flex;
   flex-direction: column;
@@ -24,4 +40,15 @@ img {
 
 .slidev-layout p:has(> img) {
   overflow: hidden;
+  text-align: center;
+  width: 50%;
+}
+
+.slidev-code-wrapper {
+  width: 50%;
+  overflow: auto;
+}
+
+img {
+  object-fit: contain;
 }

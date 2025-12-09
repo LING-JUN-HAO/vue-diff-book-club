@@ -27,7 +27,7 @@ welcome to Guangdong, i hope you have a great travel.
 welcome to Beijing, i hope you have a great travel.
 ```
 
-![benchmark 圖片](./public/benchmark-1.jpg) {.section-image}
+![benchmark 測試結果](./public/benchmark-1.jpg) {.section-image}
 
 ---
 
@@ -45,16 +45,6 @@ welcome to Beijing, i hope you have a great travel.
     - 掛載新節點 & 透過最長遞增子序列最小化移動操作
 
 </v-clicks>
-
-<style scoped>
-.slidev-layout ol li + li {
-  margin-top: 0.75rem;
-}
-
-.slidev-layout ol li ul {
-  margin-top: 0.75rem;
-}
-</style>
 
 ---
 
@@ -83,25 +73,9 @@ welcome to Beijing, i hope you have a great travel.
   }
 ```
 
-![11-1 相同的前置節點.png](./public/11-1-F.jpg){.fix-dark}
+![相同的前置節點](./public/11-1-F.jpg)
 
 </div>
-
-<style scoped>
-.slidev-layout p:has(> img){
-  text-align: center;
-  width: 50%;
-}
-
-.slidev-code-wrapper{
-  width: 50%;
-  overflow: auto;
-}
-
-img{
-  object-fit: contain;
-}
-</style>
 
 ---
 
@@ -135,25 +109,9 @@ img{
   }
 ```
 
-![11-2 相同的後置節點.png](./public/11-1-B.jpg){.fix-dark}
+![相同的後置節點](./public/11-1-B.jpg)
 
 </div>
-
-<style scoped>
-.slidev-layout p:has(> img){
-  text-align: center;
-  width: 50%;
-}
-
-.slidev-code-wrapper{
-  width: 50%;
-  overflow: auto;
-}
-
-img{
-  object-fit: contain;
-}
-</style>
 
 ---
 
@@ -183,25 +141,9 @@ function patchKeyedChildren(n1, n2, container) {
 }
 ```
 
-![11-1 純新增情形.png](./public/11-1-create.jpg){.fix-dark}
+![純新增情形](./public/11-1-create.jpg)
 
 </div>
-
-<style scoped>
-.slidev-layout p:has(> img){
-  text-align: center;
-  width: 50%;
-}
-
-.slidev-code-wrapper{
-  width: 50%;
-  overflow: auto;
-}
-
-img{
-  object-fit: contain;
-}
-</style>
 
 ---
 
@@ -219,9 +161,9 @@ img{
     // 省略前置節點及後置節點的處理
     // 純移除節點條件
 		if (j > oldEnd && j <= newEnd) {
-			// 新增節點
+			// 舊子節點比較完，僅需處理掛載節點
 		}else if(j > newEnd && j <= oldEnd){
-			// 卸載節點
+			// 新子節點比較完，僅需處理需卸載節點
 			while( j <= oldEnd){
 				unmount(oldChildren[j++])
 			}
@@ -229,22 +171,190 @@ img{
   }
 ```
 
-![11-1 純新增情形.png](./public/11-1-delete.jpg){.fix-dark}
+![純刪除情形](./public/11-1-delete.jpg)
 
 </div>
 
-<style scoped>
-.slidev-layout p:has(> img){
-  text-align: center;
-  width: 50%;
-}
+---
 
-.slidev-code-wrapper{
-  width: 50%;
-  overflow: auto;
-}
+# 處理複雜場景
 
-img{
-  object-fit: contain;
+在前置與後置比對階段，只會遇到「純新增」與「純刪除」的情況，不需要進行移動操作。但在更複雜的情形下，新舊子節點的順序可能發生變動，且無法一一對應。這時就需要透過**中段節點 diff**，綜合處理節點的復用、刪除、新增與移動。
+
+
+<div class="flex overflow-hidden gap-4">
+
+```ts
+function patchKeyedChildren(n1, n2, container) {
+  // 省略前置節點及後置節點的處理
+  if (j > oldEnd && j <= newEnd) {
+    // 舊子節點比較完，僅需處理掛載節點
+  }else if(j > newEnd && j <= oldEnd){
+    // 新子節點比較完，僅需處理需卸載節點
+  }else{
+    // 中段 diff 處理複雜場景
 }
-</style>
+```
+
+![複雜場景](./public/11-2-1.jpg)
+
+</div>
+
+---
+
+# 中段 diff 處理流程 1 - 確認可以複用的舊子節點
+
+
+- 雙層迴圈遍歷新舊子節點中段區域，找出可以複用的節點，並調用 patch 函數更新內容。
+
+**時間複雜度 O(n x m) ⇒ O(n^ 2)**
+
+<div class="flex overflow-hidden gap-4">
+
+```ts
+  function patchKeyedChildren(n1, n2, container) {
+    // 省略前置節點及後置節點的處理
+		if (j > oldEnd && j <= newEnd) {
+			// 舊子節點比較完，僅需處理掛載節點
+		}else if(j > newEnd && j <= oldEnd){
+			// 新子節點比較完，僅需處理需卸載節點
+		}else{
+			// 中段 diff 比較處理區域		
+		  // oldStart 和 newStart 分別為起始索引，即 j
+		  const oldStart = j
+		  const newStart = j
+		
+		  // 雙層迴圈找出可覆用的節點
+		  for (let i = oldStart; i <= oldEnd; i++) {
+		    const oldVNode = oldChildren[i]
+		    for (let k = newStart; k <= newEnd; k++) {
+		      const newVNode = newChildren[k]
+		      if (oldVNode.key === newVNode.key) {
+            // 更新覆用節點內容
+		        patch(oldVNode, newVNode, container)
+		      }
+		    }
+		  }
+  }
+```
+
+![雙層迴圈找可復用節點](./public/11-2-1.jpg)
+
+</div>
+
+<v-click>
+
+> 隨著新舊子節點數量增加，效能會急劇下降。因此需要優化這個過程
+
+</v-click>
+
+---
+
+# 中段 diff 處理流程 1 - 確認可複用的舊子節點(優化版)
+
+
+- 使用**keyIndex 索引表**：將新子節點的 key 映射到索引位置，透過單層迴圈遍歷舊子節點，並使用索引表進行 O(1) 時間查找對應的新節點。
+
+**時間複雜度降低成：O(n + m)  ⇒ O(n)**
+
+<div class="flex overflow-hidden gap-4">
+
+```ts
+  function patchKeyedChildren(n1, n2, container) {
+    // 省略前置節點及後置節點的處理
+		if (j > oldEnd && j <= newEnd) {
+			// 舊子節點比較完，僅需處理掛載節點
+		}else if(j > newEnd && j <= oldEnd){
+			// 新子節點比較完，僅需處理需卸載節點
+		}else{
+			// 中段 diff 比較處理區域		
+		  // oldStart 和 newStart 分別為起始索引，即 j
+		  const oldStart = j
+		  const newStart = j
+		
+      const keyIndex = new Map()
+
+      // 遍歷新子節點，建立索引表
+      for (let i = newStart; i <= newEnd; i++) {
+        keyIndex.set(newChildren[i].key, i)
+      }
+
+      // 遍歷舊子節點，通過索引表查找
+      for (let i = oldStart; i <= oldEnd; i++) {
+        const oldVNode = oldChildren[i]
+        
+        // O(1) 時間查找對應的新節點索引
+        const k = keyIndex.get(oldVNode.key)
+
+        if (typeof k !== undefined) {
+          // 找到可覆用的節點
+          const newVNode = newChildren[k]
+          patch(oldVNode, newVNode, container)
+        }
+      }
+  }
+}
+```
+
+![keyIndex 優化舊子節點復用](./public/11-2-1.jpg)
+
+</div>
+
+> keyIndex Map：鍵是「新子節點的 key」，值是「新節點在新子節點陣列中的索引」
+
+---
+
+# 中段 diff 處理流程 2 - 遍歷舊節點建立 source 映射關係
+
+前面已經能判斷哪些舊節點可以複用，接下來需要建立一個 source 陣列來記錄這些可複用節點的對應關係。
+
+透過 source 陣列，我們可以追蹤哪些舊節點被複用、哪些需要刪除，以及哪些新節點需要新增。
+
+<div class="flex overflow-hidden gap-4">
+
+```ts
+  function patchKeyedChildren(n1, n2, container) {
+    // 省略前置節點及後置節點的處理
+		if (j > oldEnd && j <= newEnd) {
+			// 舊子節點比較完，僅需處理掛載節點
+		}else if(j > newEnd && j <= oldEnd){
+			// 新子節點比較完，僅需處理需卸載節點
+		}else{
+			// 中段 diff 比較處理區域
+
+      // == 新增 source 陣列建立映射關係(預設填滿 -1) ==
+      const count = newEnd - j + 1
+		  const source = new Array(count)
+		  source.fill(-1)
+       // == 新增 source 陣列建立映射關係 ==
+
+		  const oldStart = j
+		  const newStart = j
+		
+      const keyIndex = new Map()
+
+      for (let i = newStart; i <= newEnd; i++) {
+        keyIndex.set(newChildren[i].key, i)
+      }
+
+      for (let i = oldStart; i <= oldEnd; i++) {
+        const oldVNode = oldChildren[i]
+        const k = keyIndex.get(oldVNode.key)
+
+        if (typeof k !== undefined) {
+          // 找到可覆用的節點
+          const newVNode = newChildren[k]
+          patch(oldVNode, newVNode, container)
+          // 更新 source 陣列映射關係
+          source[k - newStart] = i
+        }
+      }
+  }
+}
+```
+
+![source 陣列紀錄新舊節點位置映射關係](./public/11-2-2.jpg)
+
+</div>
+
+> source 陣列：記錄新子節點對應的舊子節點索引位置（若無對應則為 -1）
