@@ -851,6 +851,10 @@ renderer.render(componentVnode, document.querySelector("#app"));
 ```
 <div class="w1/2 overflow-auto">
 
+### 流程說明
+
+<hr class="mt-2 mb-2" />
+
 1. **啟動渲染(渲染器入口)**
     - renderer.render(componentVnode, container)
 
@@ -885,6 +889,115 @@ strong{
   display: block;
 }
 </style>
+
+---
+
+# 以 Options API 為例，探討組件自身狀態管理及更新
+
+- 透過 **data** 函數定義組件內部狀態 **foo**
+- 在 **render 函數**中使用 **this.foo** 訪問響應式狀態
+- 使用 **effect** 建立響應式依賴收集，當狀態變化時自動觸發重新渲染
+
+<div class="flex overflow-hidden gap-4">
+
+```ts
+const MyComponent = {
+	data(){
+		return {
+			foo: 'Hello foo Component'
+		}
+	},
+  render() {
+    return {
+      type: 'div',
+      children: `查看定義的 foo 變數：${this.foo}`
+    };
+  }
+};
+```
+
+```ts
+function mountComponent(vnode, container, anchor = null) {
+  const componentOptions = vnode.type;
+    // 取出組件的 data 與 render 函數
+  const { render, data } = componentOptions;
+  // 取得 data 返回原始物件，並使用 reactive 包裝為響應式
+  const state = reactive(data())
+
+  effect(() => {
+      // 綁定 this 為 state，使 render 內部可通過 this 訪問狀態
+      const subTree = render.call(state);
+      // 執行 patch 進行 DOM 更新
+      patch(null, subTree, container, anchor);
+  });
+}
+```
+</div>
+
+> 每次響應式狀態變化時，effect 會**同步執行**。如果在同一時刻多次修改狀態，就會觸發多次重新渲染，造成不必要的性能開銷
+
+<style scope>
+
+.slidev-code-wrapper{
+  width: 100%
+}
+
+.flex > .slidev-code-wrapper{
+  width: 50%
+}
+
+</style>
+
+---
+
+# 使用 Scheduler 延緩更新
+
+- 引入任務隊列與微任務機制，將多次狀態變更的更新操作合併到下一個微任務中執行，避免重複渲染
+
+<div class="flex overflow-hidden gap-4">
+
+```ts
+// 任務隊列，搭配 Set 去重
+const queue = new Set();
+// 是否正在刷新任務隊列
+let isFlushing = false;
+
+function queueJob(job) {
+  queue.add(job);
+  
+  if (!isFlushing) {
+    isFlushing = true;
+    Promise.resolve().then(() => {
+      try {
+        queue.forEach(job => job());
+      } finally {
+        isFlushing = false;
+        queue.clear();
+      }
+    });
+  }
+}
+```
+
+```ts
+function mountComponent(vnode, container, anchor = null) {
+  const componentOptions = vnode.type;
+  const { render, data } = componentOptions;
+  const state = reactive(data())
+
+  // ★ 加入 scheduler options 延遲任務執行
+  effect(() => {
+      const subTree = render.call(state);
+      patch(null, subTree, container, anchor);
+  }, { scheduler: queueJob});
+}
+```
+
+</div>
+
+> 目前 `patch` 的第一個參數固定為 `null`，導致每次更新都重新掛載。接下來我們將實現組件實例機制，保存上一次渲染的 subTree，實現節點複用與 diff 更新。
+
+
 
 ---
 layout: center
