@@ -709,7 +709,182 @@ function patchKeyedChildren(n1, n2, container) {
 
 ---
 
-# 渲染組件
+# 渲染組件流程
+
+渲染器可以根據不同的 **vnode.type** 採用不同的處理方法完成掛載和更新。
+
+> 組件是對頁面內容的封裝單元，用於描述頁面的特定部分。每個組件都包含一個渲染函數(render)，該函數負責返回對應的虛擬 DOM 結構
+
+<div class="flex overflow-hidden gap-4">
+
+```ts
+function patch(n1, n2, container, anchor = null) {
+    if (n1 && n1.type !== n2.type) {
+      unmount(n1);
+      n1 = null;
+    }
+    const { type } = n2;
+    if (typeof type === "string") {
+      // 作為普通元素處理
+    }else if(type === Text){
+		  // 作為文本節點處理(Text 是 Symbol)
+    }else if(type === Fragment){
+			// 作為片段處理(Fragment 是 Symbol)
+    } else if (typeof type === "object") {
+      // 組件
+      if (!n1) {
+        // 掛載組件
+        mountComponent(n2, container, anchor);
+      } else {
+        // 更新組件
+        patchComponent(n1, n2, anchor);
+      }
+    }
+  }
+}
+```
+
+```ts
+// 組件描述
+const MyComponent = {
+  render() {
+    return {
+      type: "div",
+      children: `hello world !!!`
+    };
+  }
+};
+
+// 組件的 vnode 表示
+const componentVnode = {
+  type: MyComponent,
+};
+```
+
+</div>
+
+---
+
+# 回想渲染器架構
+
+- mountComponent: 負責執行組件的 render 函數
+- mountElement: 負責創建真實 DOM
+
+<div class="flex overflow-hidden gap-4">
+
+```ts
+// 正規化字串、陣列及物件屬性表示方式
+function normalizeClass(value) {...}
+
+// prop vs attribute 判斷邏輯
+function shouldSetAsProps(el, key) {...}
+
+function createRenderer(options) {
+  const { createElement, setElementText, insertElement, patchProps, unmount } = options;
+
+  // 掛載普通元素邏輯區域
+  function mountElement(vnode, container, anchor = null) {...}
+
+	// 掛載組件
+  function mountComponent(vnode, container, anchor = null) {
+    const componentOptions = vnode.type;
+     // 執行組件的 render 函數,得到要渲染的虛擬 DOM
+    const { render } = componentOptions;
+    const subTree = render();
+    // 遞歸調用 patch,這次會進入 mountElement 分支
+    patch(null, subTree, container, anchor);
+  }
+
+  function patch(n1, n2, container, anchor = null) {
+      if (n1 && n1.type !== n2.type) {
+        unmount(n1);
+        n1 = null;
+      }
+      const { type } = n2;
+      if (typeof type === "string") {
+        // 作為普通元素處理
+      }else if(type === Text){
+        // 作為文本節點處理(Text 是 Symbol)
+      }else if(type === Fragment){
+        // 作為片段處理(Fragment 是 Symbol)
+      } else if (typeof type === "object") {
+        // 組件
+        if (!n1) {
+          // 掛載組件
+          mountComponent(n2, container, anchor);
+        } else {
+          // 更新組件
+          patchComponent(n1, n2, anchor);
+        }
+      }
+    }
+  }
+
+  // 如果節點不存在，則調用 patch 函數進行掛載
+  function render(vnode, container) {...}
+
+  return { render };
+}
+
+// 可選配置(控制反轉讓使用者決定掛載、卸載、更新等操作的邏輯)
+const options = {...};
+
+const renderer = createRenderer(options);
+
+// 組件描述
+const MyComponent = {
+  render() {
+    return {
+      type: "div",
+      children: `hello world !!!`
+    };
+  }
+};
+
+// 組件的 vnode 表示
+const componentVnode = {
+  type: MyComponent,
+};
+
+// 渲染組件
+renderer.render(componentVnode, document.querySelector("#app"));
+```
+<div class="w1/2 overflow-auto">
+
+1. **啟動渲染(渲染器入口)**
+    - renderer.render(componentVnode, container)
+
+2. **進入 patch 邏輯**
+    - n1 為 null 表示首次掛載
+    - patch(null, componentVnode, container)
+
+3. **組件類型判斷**
+    - typeof vnode.type === "object" 為 true
+    - 調用 mountComponent
+
+4. **執行組件渲染**
+    - render() 函數執行，返回 subTree 虛擬 DOM
+
+5. **遞歸 patch 子樹，處理組件的渲染結果**
+    - patch(null, subTree, container) 
+
+6. **元素類型判斷**
+    - typeof vnode.type === "string" 為 true
+    - 調用 mountElement
+
+7. **創建真實節點**
+    - 根據 vnode 生成真實 DOM 並掛載
+
+</div>
+
+</div>
+
+<style scope>
+
+strong{
+  display: block;
+}
+</style>
 
 ---
 layout: center
