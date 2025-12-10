@@ -926,7 +926,7 @@ function mountComponent(vnode, container, anchor = null) {
 
   effect(() => {
       // 綁定 this 為 state，使 render 內部可通過 this 訪問狀態
-      const subTree = render.call(state);
+      const subTree = render.call(state, state);
       // 執行 patch 進行 DOM 更新
       patch(null, subTree, container, anchor);
   });
@@ -987,7 +987,7 @@ function mountComponent(vnode, container, anchor = null) {
 
   // ★ 加入 scheduler options 延遲任務執行
   effect(() => {
-      const subTree = render.call(state);
+      const subTree = render.call(state, state);
       patch(null, subTree, container, anchor);
   }, { scheduler: queueJob});
 }
@@ -995,9 +995,127 @@ function mountComponent(vnode, container, anchor = null) {
 
 </div>
 
-> 目前 `patch` 的第一個參數固定為 `null`，導致每次更新都重新掛載。接下來我們將實現組件實例機制，保存上一次渲染的 subTree，實現節點複用與 diff 更新。
+> 目前 `patch` 的第一個參數固定為 `null`，導致每次更新都重新掛載。接下來我們來實現組件**實例機制**，保存上一次渲染的 subTree，實現節點複用與 diff 更新。
+
+---
+
+# 為什麼需要組件實例？
+
+組件實例是一個**持久化的上下文對象**，為組件提供「記憶」能力：
+- **保存渲染歷史**：存儲上一次的 subTree，使 patch 能夠進行 diff 比對，實現局部更新
+- **管理組件狀態**：統一存放響應式狀態（state）、外部屬性（props）等數據
+- **追蹤更新狀態**：標記組件的掛載狀態（isMounted）、更新標記等信息
+- **封裝生命週期**：為 mounted、updated、unmounted 等鉤子提供執行環境
+
+<style scope>
+ul li{
+  line-height: 2.2;
+}
+
+</style>
+
+---
+
+# 為組件建立持久化上下文對象
+
+<div class="flex overflow-hidden gap-4">
 
 
+<div class="w1/2">
+
+- **管理組件狀態、追蹤更新狀態、保存渲染歷史**
+
+```ts
+function mountComponent(vnode, container, anchor = null) {
+  const componentOptions = vnode.type;
+  const { render, data } = componentOptions;
+  const state = reactive(data())
+    // ★ 創建組件實例對象
+    const instance = {
+    // 響應式狀態
+	  state,
+    // 是否為初次掛載掛載
+	  isMounted: false,
+    // 組件上次渲染的虛擬 DOM 樹
+	  subTree: null 
+  }
+  // ★ 將組件實例綁定到 vnode 上，方便後續更新使用
+  vnode.component = instance
+
+  effect(() => {
+      const subTree = render.call(state, state);
+      // ★ 判斷需要掛載還是更新
+      if(!instance.isMounted){
+        // 首次掛載：沒有舊的 VNode，直接創建 DOM
+        patch(null, subTree, container, anchor);
+        // 調整標記為已掛載
+        instance.isMounted = true
+      }else{
+        // 更新階段:有舊的 VNode，進行 diff 對比
+        patch(instance.subTree, subTree, container, anchor);
+      }
+      // 保存本次的 VNode，供下次比對使用
+      instance.subTree = subTree;
+  }, { scheduler: queueJob});
+}
+```
+</div>
+
+<div class="w1/2">
+
+- **封裝生命週期**
+
+```ts
+function mountComponent(vnode, container, anchor = null) {
+  const componentOptions = vnode.type;
+  // ★ 傳入不同生命週期定義函數
+  const { render, data, beforeCreate, created, beforeMount, mounted, beforeUpdate, updated } = componentOptions;
+    // ★ beforeCreate 生命週期 hook(組件實例初始化之前，無法訪問 state)
+  beforeCreate && beforeCreate.call(null);
+  const state = reactive(data())
+  const instance = {
+    state,
+    isMounted: false,
+    subTree: null 
+  }
+  vnode.component = instance
+  // ★ created 生命週期 hook(響應式數據創建完成)
+  created && created.call(state)
+
+  effect(() => {
+      const subTree = render.call(state, state);
+
+      if(!instance.isMounted){
+        // ★ beforeMount 生命週期 hook(組件掛載到 DOM 之前)
+		    beforeMount && beforeMount.call(state)
+        patch(null, subTree, container, anchor);
+        instance.isMounted = true
+        // ★ mounted 生命週期 hook(組件掛載完成之後，需考量 queuePostFlushCb 避免同步執行)
+		    mounted && mounted.call(state)
+      }else{
+        // ★ beforeUpdate 生命週期 hook(組件更新之前)
+		    beforeUpdate && beforeUpdate.call(state)
+        patch(instance.subTree, subTree, container, anchor);
+	      // ★ updated 生命週期 hook(組件更新完成後，需考量 queuePostFlushCb 避免同步執行)
+		    updated && updated.call(state)
+      }
+
+      instance.subTree = subTree;
+  }, { scheduler: queueJob});
+}
+```
+</div>
+
+</div>
+
+<style scope>
+
+.slidev-code-wrapper{
+  width: 100%;
+  height: 100%;
+  overflow: auto;
+}
+</style>
 
 ---
 layout: center
