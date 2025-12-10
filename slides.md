@@ -1135,8 +1135,6 @@ function mountComponent(vnode, container, anchor = null) {
 <MyComponent title="A" :other="val">
 ```
 
-<hr />
-
 - **組件 & vnode 定義**
 
 ```ts
@@ -1220,13 +1218,319 @@ function resolveProps(options, propsData){
 
 .custom .slidev-code-wrapper{
   height: auto;
+
+  &:nth-of-type(2){
+    flex: 1;
+  }
+}
+</style>
+
+---
+
+# 父組件 Props 改動更新子組件
+
+當父組件的 props 發生變化時，由於子組件的 props 採用 shallowReactive 響應式處理，props 的更新會自動觸發子組件內部的 effect 重新執行，從而驅動子組件完成重新渲染。
+
+<div class="flex overflow-hidden gap-4">
+
+
+<div class="w1/2 flex flex-col custom">
+
+- **Template**
+
+```vue
+<template>
+  <MyComponent :title="title">
+</template>
+```
+
+- **組件 & vnode 定義**
+
+```ts
+const MyComponent = {
+	props: {
+		title: String
+	},
+  render() {
+    return {
+      type: "div",
+      children: `title is ${this.title}`
+    };
+  }
+};
+
+const componentVnode = {
+  type: MyComponent,
+  props: {
+	  title: "I am title",
+  }
+};
+```
+
+</div>
+
+<div class="w1/2 flex flex-col">
+
+- **patchComponent 組件更新方法**
+
+```ts
+function patchComponent(n1, n2, anchor) {
+  // 獲取組件實例並且復用
+  const instance = (n2.component = n1.component)
+  // 取得子組件實例中的響應式 props（shallowReactive）
+  const { props } = instance
+  
+  // 檢查 props 是否改變
+  if (hasPropsChanged(n1.props, n2.props)) {
+    // 解析新的 props
+    const { type } = n2
+    // resolveProps 前面提到會回傳 props 與 attrs，這邊暫時僅先處理 props
+    const [nextProps] = resolveProps(type.props, n2.props)
+    
+    // 更新存在的 props，改動屬性 -> 觸發 shallowReactive 變更偵測
+    for (const key in nextProps) {
+      props[key] = nextProps[key]
+    }
+    
+    // 刪除不存在的舊 props -> 觸發 shallowReactive 變更偵測
+    for (const k in props) {
+      if (!(k in nextProps)) {
+        delete props[k]
+      }
+    }
+  }
 }
 
-.custom .slidev-code-wrapper:nth-of-type(2){
+// 檢查 props 是否改變
+function hasPropsChanged(prevProps, nextProps) {  
+  const nextKeys = Object.keys(nextProps)
+  // 如果新舊組件 vnode 的 props 長度不同，則表示有改變
+  if (nextKeys.length !== Object.keys(prevProps).length) {
+    return true
+  }
+  
+  // 僅針對 props 中的屬性進行淺層比對
+  for (let i = 0; i < nextKeys.length; i++) {
+	  const key = nextKeys[i]
+    if (nextProps[key] !== prevProps[key]) {
+      return true
+    }
+  }
+  
+  return false
+}
+```
+</div>
+
+</div>
+
+<style scope>
+.slidev-code-wrapper{
+  width: 100%;
+  height: 100%;
+  overflow: auto;
+}
+
+.custom .slidev-code-wrapper{
+  height: auto;
+
+  &:nth-of-type(2){
+    flex: 1;
+  }
+}
+</style>
+
+---
+
+# 使用 instance 綁定 this 的問題
+
+將組件的生命週期函數和 render 函數的 this 直接綁定到 instance，目前會引發兩個問題：
+1. **訪問 props 和 state 過於冗長**：子組件需要透過 this.props 和 this.state 明確指定來源來訪問 props 和 state
+2. **無法攔截 props 的修改**：直接修改 props 不會被攔截，違反了「props 應該是只讀的」原則
+
+<div class="flex overflow-hidden gap-4">
+
+<div class="w1/2 flex flex-col">
+
+- **使用 instance 綁定**
+
+```ts
+function mountComponent(vnode, container, anchor = null) {
+  const componentOptions = vnode.type;
+  const { render, data, props: propsOption, created } = componentOptions;
+  const [ props, attrs] = resolveProps(propsOption, vnode.props)
+
+  const state = reactive(data())
+  const instance = {
+    state,
+    isMounted: false,
+    props: shallowReactive(props),
+    subTree: null 
+  }
+  vnode.component = instance
+
+ // ★ 綁定組件生命週期 this 為 instance
+  created && created.call(instance)
+  // 省略 effect 邏輯
+}
+```
+</div>
+
+<div class="w1/2 flex flex-col custom">
+
+- **組件內的訪問方式**
+
+```ts
+const MyComponent = {
+  props: {
+    title: String
+  },
+  data() {
+    return {
+      count: 0
+    };
+  },
+  created() {
+    // 必須明確指定從哪裡取值
+    console.log(this.props.title);
+    console.log(this.state.count);
+    // 修改 props 不會被攔截
+    this.props.title = "new";
+  },
+  render() {
+    // 訪問變得冗長
+    return {
+      type: "div",
+      children: `${this.props.title}: ${this.state.count}`
+    };
+  }
+};
+```
+</div>
+
+</div>
+
+<style scope>
+.slidev-code-wrapper{
+  width: 100%;
+  height: 100%;
+  overflow: auto;
+}
+
+.custom .slidev-code-wrapper{
+  height: auto;
   flex: 1;
 }
 </style>
 
+---
+
+# 使用 Proxy 針對 instance 進行攔截處理
+
+透過 Proxy 攔截對 instance 的訪問，實現更直觀的 props 和 state 訪問方式
+
+<div class="flex overflow-hidden gap-4">
+
+<div class="w1/2 flex flex-col">
+
+- **使用 renderContext Proxy 物件綁定**
+
+```ts
+function mountComponent(vnode, container, anchor = null) {
+  // 略過部分代碼
+
+  const instance = {
+    state,
+    isMounted: false,
+    props: shallowReactive(props),
+    subTree: null 
+  }
+  
+  vnode.component = instance
+
+  // ★ 使用 Proxy 攔截 instance 的屬性訪問
+  const renderContext = new Proxy(instance, {
+    get(t, k, r) {
+      const { state, props } = t
+      
+      // ★ 優先從 state 查找，其次從 props 查找
+      if (state && k in state) { 
+        return state[k]
+      } else if (k in props) { 
+        return props[k]
+      }else{
+        console.error('不存在')
+      }
+    },
+    set(t, k, v) {
+      const { state, props } = t
+      if (state && k in state) {
+        state[k] = v
+      } else if (k in props) {
+        // ★ 攔截 props 修改，發出警告
+        console.warn(`Attempting to mutate prop "${k}". Props are readonly.`)
+      }else{
+        console.error('不存在')
+      }
+      return true
+    }
+  })
+
+ // ★ 綁定組件生命週期 this 為 renderContext
+  created && created.call(renderContext)
+
+  // 省略 effect 邏輯
+}
+```
+</div>
+
+<div class="w1/2 flex flex-col custom">
+
+- **組件內的訪問方式**
+
+```ts
+const MyComponent = {
+  props: {
+    title: String
+  },
+  data() {
+    return {
+      count: 0
+    };
+  },
+  created() {
+    // 直接訪問，自動查找
+    console.log(this.title);
+    console.log(this.count);
+    // 修改 props 應該被攔截並警告
+    this.title = "new222";
+  },
+  render() {
+    // 訪問更直觀
+    return {
+      type: "div",
+      children: `${this.title}: ${this.count}`
+    };
+  }
+};
+```
+
+</div>
+
+</div>
+
+<style scope>
+.slidev-code-wrapper{
+  width: 100%;
+  height: 100%;
+  overflow: auto;
+}
+
+.custom .slidev-code-wrapper{
+  height: auto;
+  flex: 1;
+}
+</style>
 
 ---
 layout: center
