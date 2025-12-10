@@ -2,12 +2,29 @@
 theme: seriph
 colorSchema: light
 lineNumbers: true
-title: Vue.js 架構與設計(快速 diff & 渲染器實作渲染)
+selectable: true
+contextMenu: true
+title: Vue.js 架構與設計(快速 diff & 組件的實作原理)
 class: text-center
+author: Antonio
+favicon: ./public/favicon.png
 drawings:
+  enabled: true
   persist: false
+  presenterOnly: false
+  syncAll: true
 transition: slide-left
 mdc: true
+seoMeta:
+  ogTitle: Vue.js 快速 diff & 組件的實作原理
+  ogDescription: Vue.js 設計與實現第十一章與十二章重點整理
+  ogImage: https://ling-jun-hao.github.io/vue-diff-book-club/OgImage.png
+  ogUrl: https://ling-jun-hao.github.io/vue-diff-book-club/
+  twitterCard: summary_large_image
+  twitterTitle: Vue.js 快速 diff & 組件的實作原理
+  twitterDescription: Vue.js 設計與實現第十一章與十二章重點整理
+  twitterImage: https://ling-jun-hao.github.io/vue-diff-book-club/OgImage.png
+  twitterSite: Antonio
 ---
 
 # Vue.js 架構與設計
@@ -28,6 +45,13 @@ welcome to Beijing, i hope you have a great travel.
 ```
 
 ![benchmark 測試結果](./public/benchmark-1.jpg) {.section-image}
+
+<style scope>
+.slidev-code-wrapper{
+  width: 100%;
+  overflow: clip;
+}
+</style>
 
 ---
 
@@ -596,3 +620,99 @@ function patchKeyedChildren(n1, n2, container) {
 
 > anchor 是 null，將 p-3 插入新子節點陣列的最後面
 
+---
+
+# 如何減少 DOM 移動？認識 LIS 最長遞增子序列
+
+LIS 最長遞增子序列：在陣列中找出最長的遞增子序列，元素需保持原順序但不必連續。
+
+這邊介紹比較直觀的動態規劃方法。
+- 時間複雜度：O(n^2)
+
+<div class="flex overflow-hidden gap-4">
+
+![LIS最長遞增子序列](./public/LIS最長遞增子序列.jpg)
+
+![LIS 比對結果](./public/LIS比對結果.jpg)
+
+</div>
+
+> 最終輸出：[2, 3, 7, 18]，長度為 4（可能有多組解）
+
+[資料來源](https://medium.com/%E6%8A%80%E8%A1%93%E7%AD%86%E8%A8%98/leetcode-%E8%A7%A3%E9%A1%8C%E7%B4%80%E9%8C%84-300-longest-increasing-subsequence-f160358db4d1)
+
+---
+
+# 中段 diff 處理流程 3 - 利用 LIS 最小化移動操作
+
+目的：在遍歷新子節點時，保持 LIS 中的節點位置不動，僅移動其他節點到正確位置。
+
+
+<div class="flex overflow-hidden gap-4">
+
+```ts
+function patchKeyedChildren(n1, n2, container) {
+  // 省略前置節點及後置節點的處理
+  if (j > oldEnd && j <= newEnd) {
+    // 舊子節點比較完,僅需處理掛載節點
+  } else if (j > newEnd && j <= oldEnd) {
+    // 新子節點比較完,僅需處理需卸載節點
+  } else {
+    const count = newEnd - newStart + 1
+    const source = new Array(count)
+    source.fill(-1)
+    
+    const oldStart = j
+    const newStart = j
+    let moved = false
+    let pos = 0
+    let patched = 0
+    
+    const keyIndex = new Map()
+    for (let i = newStart; i <= newEnd; i++) {
+      keyIndex.set(newChildren[i].key, i)
+    }
+    for (let i = oldStart; i <= oldEnd; i++) {...}
+
+    // ★ 透過 source 陣列取得 LIS 序列
+    const seq = moved ? getSequence(source) : []
+		let s = seq.length - 1
+    // 從後向前遍歷（只需要一次循環）
+		for (let i = count - 1; i >= 0; i--) {
+		  const pos = newStart + i
+		  const newVNode = newChildren[pos]
+		  const nextPos = pos + 1
+		  const anchor = nextPos < newChildren.length 
+		    ? newChildren[nextPos].el 
+		    : null
+		  
+		  if (source[i] === -1) {
+		    patch(null, newVNode, container, anchor)
+		  }else if(moved){
+        // 判斷當前新子節點索引是否在 LIS 中
+        if (s < 0 || i !== seq[s]) {
+          // 是移動位置而不是更新(更新在前面遍歷舊節點時已處理)
+          insert(newVNode.el, container, anchor)
+        }else{
+          // 存在子序列中，指標向前移動
+          s--
+        }
+      }
+    }
+  }
+}
+```
+
+![最長遞增子序列比對情形](./public/11-3-2.jpg)
+
+</div>
+
+---
+
+# 渲染組件
+
+---
+layout: center
+---
+
+# Thank you for listening.
