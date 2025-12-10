@@ -849,7 +849,7 @@ const componentVnode = {
 // 渲染組件
 renderer.render(componentVnode, document.querySelector("#app"));
 ```
-<div class="w1/2 overflow-auto">
+<div class="w1/2 overflow-auto flex flex-col">
 
 ### 流程說明
 
@@ -1021,7 +1021,7 @@ ul li{
 <div class="flex overflow-hidden gap-4">
 
 
-<div class="w1/2">
+<div class="w1/2 flex flex-col">
 
 - **管理組件狀態、追蹤更新狀態、保存渲染歷史**
 
@@ -1061,7 +1061,7 @@ function mountComponent(vnode, container, anchor = null) {
 ```
 </div>
 
-<div class="w1/2">
+<div class="w1/2 flex flex-col">
 
 - **封裝生命週期**
 
@@ -1116,6 +1116,117 @@ function mountComponent(vnode, container, anchor = null) {
   overflow: auto;
 }
 </style>
+
+---
+
+# 組件 Props 和透傳屬性處理
+
+組件內定義的 **props** 會使用 **shallowReactive** 進行淺層響應式處理。若傳遞的屬性未在 **props** 中定義，則會被歸類為**透傳屬性 attrs**
+
+
+<div class="flex overflow-hidden gap-4">
+
+
+<div class="w1/2 flex flex-col custom">
+
+- **Template**
+
+```ts
+<MyComponent title="A" :other="val">
+```
+
+<hr />
+
+- **組件 & vnode 定義**
+
+```ts
+const MyComponent = {
+	props: {
+		title: String
+	},
+  render() {
+    return {
+      type: "div",
+      children: `title is ${this.title}`
+    };
+  }
+};
+
+const componentVnode = {
+  type: MyComponent,
+  props: {
+	  title: "I am title",
+	  other: this.val
+  }
+};
+```
+
+</div>
+
+<div class="w1/2 flex flex-col">
+
+- **mountComponent 組件掛載方法**
+
+```ts
+function mountComponent(vnode, container, anchor = null) {
+  const componentOptions = vnode.type;
+
+  // ★ 取出組件 props 定義
+  const { render, data, props: propsOption } = componentOptions;
+  // ★ 根據定義解析傳入的屬性，目前僅處理 props 的部分
+  const [ props, attrs] = resolveProps(propsOption, vnode.props)
+
+  const state = reactive(data())
+  const instance = {
+    state,
+    isMounted: false,
+    // ★ shallowReactive 保持淺層響應式
+    props: shallowReactive(props),
+    subTree: null 
+  }
+  vnode.component = instance
+
+  // 省略 effect 邏輯
+}
+
+// ★ 定義組件屬性解析優先順序
+function resolveProps(options, propsData){
+	const props = {}
+	const attrs = {}
+	
+	for(const key in propsData){
+    if(key in options){  
+      // ★ 在組件定義的 props 中 → 歸類為 props
+      props[key] = propsData[key]
+    }else{
+      // 不在組件定義的 props 中 → 歸類為 attrs
+      attrs[key] = propsData[key]
+    }
+	}
+	
+	return [props, attrs]
+}
+```
+</div>
+
+</div>
+
+<style scope>
+.slidev-code-wrapper{
+  width: 100%;
+  height: 100%;
+  overflow: auto;
+}
+
+.custom .slidev-code-wrapper{
+  height: auto;
+}
+
+.custom .slidev-code-wrapper:nth-of-type(2){
+  flex: 1;
+}
+</style>
+
 
 ---
 layout: center
