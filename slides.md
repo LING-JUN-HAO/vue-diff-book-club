@@ -27,9 +27,7 @@ seoMeta:
   twitterSite: Antonio
 ---
 
-# Vue.js 架構與設計
-
-## 快速 Diff & 組件的實現原理
+# Vue3 快速 Diff 算法
 
 ---
 
@@ -640,6 +638,13 @@ LIS 最長遞增子序列：在陣列中找出最長的遞增子序列，元素�
 > 最終輸出：[2, 3, 7, 18]，長度為 4（可能有多組解）
 
 [資料來源](https://medium.com/%E6%8A%80%E8%A1%93%E7%AD%86%E8%A8%98/leetcode-%E8%A7%A3%E9%A1%8C%E7%B4%80%E9%8C%84-300-longest-increasing-subsequence-f160358db4d1)
+
+---
+layout: cover
+---
+
+# 組件的實作原理
+
 
 ---
 
@@ -1743,7 +1748,7 @@ function mountComponent(vnode, container, anchor = null) {
 
 ---
 
-# setupContext emit 事件觸發處理
+# setupContext emit 觸發事件
 
 <div class="flex overflow-hidden gap-4">
 
@@ -1806,12 +1811,12 @@ function mountComponent(vnode, container, anchor) {
     }
   }
   
-  // setupContext 的實現
+  // ★ setupContext 的實現
   const setupContext = { attrs, emit } // 將 emit 函數添加到 setupContext
   // 省略代碼
 }
 
-// 解析 Props & attr
+// ★ 解析 Props & attr
 function resolveProps(options, propsData){
 	const props = {}
 	const attrs = {}
@@ -1819,7 +1824,7 @@ function resolveProps(options, propsData){
 	for(const key in propsData){
     // 判斷是否為 props：
     // 1.在 props 選項中顯式聲明的屬性
-    // 2. 以 'on' 開頭的事件處理器（如 onClick、onUpdate）。事件處理器統一歸類為 props，無需在 props 選項中聲明。
+    // 2. 以 'on' 開頭的事件處理器（如 onClick、onUpdate），統一歸類為 props，無需在 props 選項中聲明。
     if(key in options || key.startsWith('on')){  
         props[key] = propsData[key]
     }else{
@@ -1849,6 +1854,307 @@ function resolveProps(options, propsData){
     flex: 1;
   }
 }
+</style>
+
+---
+
+# slot 插槽內容傳遞原理
+
+Vue 插槽在編譯後會轉換為**父組件提供的渲染函數**，子組件在渲染時調用這些函數來獲取 VNode。
+
+這個模式類似 React 的 render props 概念：父組件傳遞渲染函數，子組件決定何時、在哪裡調用。
+
+<div class="flex overflow-hidden gap-4">
+<div class="w1/2 flex flex-col custom">
+
+- **父組件模板**
+
+```vue
+<template>
+  <MyComponent>
+    <template #header>
+      <h1>我是標題</h1>
+    </template>
+    
+    <template #body>
+      <section>我是內容</section>
+    </template>
+    
+    <template #footer>
+      <h1>我是註腳</h1>
+    </template>
+  </MyComponent>
+</template>
+```
+
+- **父組件渲染函數**
+
+```ts
+function render() {
+  return {
+    type: MyComponent,
+    // 這裡的 children 是「插槽物件」
+    children: {
+      header: () => [
+        { type: 'h1', children: '我是標題' }
+      ],
+      body: () => [
+        { type: 'section', children: '我是內容' }
+      ],
+      footer: () => [
+        { type: 'h1', children: '我是註腳' }
+      ]
+    }
+  }
+}
+```
+
+</div>
+
+<div class="w1/2 flex flex-col custom">
+
+- **子組件模板(具名插槽)**
+
+```vue
+<template>
+	<header><slot name="header" /></header>
+	<body><slot name="body" /></body>
+	<footer><slot name="footer" /></footer>
+<template>
+```
+
+- **子組件渲染函數**
+
+```ts
+function render() {
+  return [
+    {
+      type: 'header',
+      children: [this.$slots.header()]
+    },
+    {
+      type: 'body',
+      children: [this.$slots.body()]
+    },
+    {
+      type: 'footer',
+      children: [this.$slots.footer()]
+    }
+  ]
+}
+```
+
+</div>
+
+</div>
+
+<style scope>
+.slidev-code-wrapper{
+  width: 100%;
+  height: 100%;
+  overflow: auto;
+}
+
+.custom .slidev-code-wrapper{
+  height: auto;
+  flex: 1;
+}
+</style>
+
+---
+
+# setupContext slot 插槽內容
+
+
+<div class="flex overflow-hidden gap-4">
+
+<div class="w1/2 flex flex-col custom">
+
+- **子組件渲染函數**
+
+```ts
+function render() {
+  return [
+    {
+      type: 'header',
+      children: [this.$slots.header()]
+    },
+    {
+      type: 'body',
+      children: [this.$slots.body()]
+    },
+    {
+      type: 'footer',
+      children: [this.$slots.footer()]
+    }
+  ]
+}
+```
+
+</div>
+
+
+<div class="w1/2 flex flex-col custom">
+
+- **mountComponent 掛載函數**
+
+```ts
+function mountComponent(vnode, container, anchor) {
+  // 省略代碼
+  
+  // ★ 從 vnode.children 讀取父組件傳遞的插槽內容
+  // 例如：{ header: () => [...], body: () => [...] }
+  const slots = vnode.children || {}
+  
+  const instance = {
+    state,
+    props: shallowReactive(props),
+    isMounted: false,
+    subTree: null, 
+    // ★ 將插槽保存在組件實例中，供渲染函數使用
+    slots
+  }
+  
+  vnode.component = instance
+	
+	const renderContext = new Proxy(instance, {
+    get(t, k, r) {
+      const { state, props, slots } = t
+      // 當訪問 this.$slots 時，返回插槽對象
+      // 讓渲染函數可以通過 this.$slots.header() 調用插槽
+      if(k === '$slots') return slots
+    },
+    
+    set(t, k, v) {
+      // 省略代碼
+    }
+  })
+}
+```
+
+</div>
+
+</div>
+
+<style scope>
+
+.slidev-code-wrapper{
+  width: 100%;
+  height: 100%;
+  overflow: auto;
+}
+
+.custom .slidev-code-wrapper{
+  height: auto;
+  flex: 1;
+}
+
+</style>
+
+---
+
+# setup 函數 - 生命週期綁定問題
+
+setup 中 onMounted 是普通函數調用，缺乏明確的組件上下文信息，無法自動確定應該註冊到哪個組件實例。
+
+<div class="flex overflow-hidden gap-4">
+
+<div class="w1/2 flex flex-col custom">
+
+- **問題描述**
+
+```ts
+const ComponentA = {
+  setup() {
+    // onMounted 函數調用，如何知道應該註冊到 ComponentA？
+    onMounted(() => {
+      console.log('A mounted')
+    })
+    // ★ onMounted 函數可重複調用
+    onMounted(() => {
+      console.log('A mounted')
+    })
+  }
+}
+
+//-----------
+
+const ComponentB = {
+  setup() {
+    // onMounted 函數調用，如何知道應該註冊到 ComponentB？
+    onMounted(() => {
+      console.log('A mounted')
+    })
+  }
+}
+```
+
+</div>
+
+
+<div class="w-1/2 flex flex-col custom">
+
+- **mountComponent 掛載函數(以 onMounted 為例)**
+
+```ts
+function mountComponent(vnode, container, anchor) {
+  // 省略代碼
+  const slots = vnode.children || {}
+  const instance = {
+    state,
+    props: shallowReactive(props),
+    isMounted: false,
+    subTree: null, 
+    slots,
+      // ★ 儲存 setup 內註冊的 onMounted 回調函數
+    mounted: []
+  }
+
+  const setupContext = { attrs, emit, slots }
+  // ★ 設置當前實例，供 onMounted 使用
+  setCurrentInstance(instance)
+  const setupResult = setup(shallowReadonly(instance.props), setupContext)
+  // ★ setup 執行完後取消當前實例記錄
+  setCurrentInstance(null)
+  
+  
+  vnode.component = instance
+
+  // 省略部分代碼
+	
+}
+```
+
+- **onMounted 函數實現**
+
+```ts
+function onMounted(fn) {
+  if (currentInstance) {
+    // 將生命週期函數註冊到當前組件實例中
+    currentInstance.mounted.push(fn)
+  } else {
+    console.error('onMounted 函数只能在 setup 中調用')
+  }
+}
+```
+
+</div>
+
+</div>
+
+<style scope>
+
+.slidev-code-wrapper{
+  width: 100%;
+  height: 100%;
+  overflow: auto;
+}
+
+.custom .slidev-code-wrapper{
+  height: auto;
+  flex: 1;
+}
+
 </style>
 
 ---
