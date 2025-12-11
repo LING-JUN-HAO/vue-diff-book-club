@@ -1229,7 +1229,7 @@ function resolveProps(options, propsData){
 
 # 父組件 Props 改動更新子組件
 
-當父組件的 props 發生變化時，由於子組件的 props 採用 shallowReactive 響應式處理，props 的更新會自動觸發子組件內部的 effect 重新執行，從而驅動子組件完成重新渲染。
+當父組件的 props 發生變化時，會觸發 `patchComponent` 進行組件更新。由於子組件的 props 採用 `shallowReactive` 響應式處理，直接修改 props 對象的屬性會觸發響應式系統的依賴更新，進而驅動子組件的渲染 effect 重新執行，完成子組件的重新渲染。
 
 <div class="flex overflow-hidden gap-4">
 
@@ -1427,8 +1427,6 @@ const MyComponent = {
 
 # 使用 Proxy 針對 instance 進行攔截處理
 
-透過 Proxy 攔截對 instance 的訪問，實現更直觀的 props 和 state 訪問方式
-
 <div class="flex overflow-hidden gap-4">
 
 <div class="w1/2 flex flex-col">
@@ -1531,6 +1529,218 @@ const MyComponent = {
   flex: 1;
 }
 </style>
+
+---
+
+# Vue Composition API setup 函數的兩種返回方式
+
+Vue3 Composition API 引入了 **setup 函數**，作為組件邏輯的入口點。
+
+<div class="flex overflow-hidden gap-4">
+
+<div class="w1/2 flex flex-col">
+
+- **setup 返回渲染函數**
+
+```ts
+const Comp = {
+  setup() {
+    const count = ref(0)
+    
+    return () => {
+      return { 
+        type: 'div', 
+        children: `count is: ${count.value}` 
+      }
+    }
+  }
+}
+```
+</div>
+
+<div class="w1/2 flex flex-col custom">
+
+- **setup 返回數據對象**
+
+```ts
+const Comp = {
+  setup() {
+    const count = ref(0)
+    
+    return {
+      count
+    }
+  },
+  render() {
+    // ★ render 函數中可透過 this 訪問 setup 返回的屬性
+    return { 
+      type: 'div', 
+      children: `count is: ${this.count}` 
+    }
+  }
+}
+```
+
+</div>
+
+</div>
+
+> render 函數中透過 this 訪問 setup 返回的屬性，需要在組件實例的 renderContext Proxy 中進行額外處理
+
+<style scope>
+.slidev-code-wrapper{
+  width: 100%;
+  height: 100%;
+  overflow: auto;
+}
+
+.custom .slidev-code-wrapper{
+  height: auto;
+  flex: 1;
+}
+</style>
+
+---
+
+# setup(props, setupContext) 參數說明
+
+<div class="flex overflow-hidden gap-4">
+
+- **props**：組件接收到的屬性對象
+- **setupContext**：組件上下文相關資訊
+  - **slots - Object**：插槽內容
+  - **emit - Funtion**：觸發事件
+  - **attrs - Object**：透傳屬性
+  - **expose - Object**：暴露給父組件的屬性/方法
+
+
+```ts
+const MyComponent = {
+  props: {
+    title: String
+  },
+  setup(props, { attrs, slots, emit, expose }) {
+    // 訪問 props
+    console.log(props.title)
+    // 訪問透傳屬性
+    console.log(attrs.class)
+    // 觸發事件
+    const handleClick = () => {
+      emit('update', newValue)
+    }
+    // 暴露給父組件的屬性/方法
+    expose({
+      focus: () => { /* ... */ }
+    })
+    
+    return {
+      handleClick
+    }
+  }
+}
+```
+
+</div>
+
+<style scope>
+ul li{
+  line-height: 2.4;
+}
+</style>
+
+---
+
+# 使用 Proxy 統一處理 setup 返回的數據
+
+<div class="flex overflow-hidden gap-4">
+
+<div class="children:leading-[2.2]! w-1/2">
+
+setup 函數的返回值有兩種可能：
+- **函數**：作為組件的 render 函數
+- **對象**：作為組件的響應式狀態
+
+<hr  class="mt-2  mb-2"/>
+
+我們需要處理這兩種情況，並將對象形式的返回值整合到組件實例中，讓 **render 函數**可以通過 **this** 訪問 **setup 返回的屬性**
+
+</div>
+
+```ts
+function mountComponent(vnode, container, anchor = null) {
+  // 略過部分代碼
+
+  const componentOptions = vnode.type
+  let { render, data, setup } = componentOptions
+  const state = data ? reactive(data()) : null
+  const [props, attrs] = resolveProps(propsOption, vnode.props)
+
+  const instance = {
+    state,
+    isMounted: false,
+    props: shallowReactive(props),
+    subTree: null 
+  }
+  
+  vnode.component = instance
+
+  // ★ 構建 setupContext，包含 attrs 等屬性
+  const setupContext = { attrs }
+  // 調用 setup 函數
+  // - 第一個參數：只讀版本的 props（防止在 setup 中修改 props）
+  // - 第二個參數：setupContext（提供 attrs、emit 等上下文信息）
+  const setupResult = setup(shallowReadonly(instance.props), setupContext)
+  // setupState 用於存儲 setup 返回的數據對象
+  let setupState = null
+  // ★ 如果 setup 函數的返回值是函數,則將其作為組件的渲染函數
+  if (typeof setupResult === 'function') {
+    // 情況1：返回渲染函數
+    if (render) console.error('setup 函數返回渲染函數，render 選項將被忽略')
+    render = setupResult
+  } else {
+    // 情況2：返回狀態對象，保存到 setupState
+    setupState = setupResult
+  }
+
+
+  const renderContext = new Proxy(instance, {
+    // 優先級：state > props > setupState
+    get(t, k, r) {
+      const { state, props } = t
+      
+      if (state && k in state) { 
+        return state[k]
+      } else if (k in props) { 
+        return props[k]
+      } else if (setupState && k in setupState) {
+        return setupState[k]
+      } else{
+        console.error('不存在')
+      }
+    },
+    set(t, k, v) {
+      const { state, props } = t
+      if (state && k in state) {
+        state[k] = v
+      } else if (k in props) {
+        // ★ 攔截 props 修改，發出警告
+        console.warn(`Attempting to mutate prop "${k}". Props are readonly.`)
+      } else if (setupState && k in setupState) {
+        setupState[k] = v
+      } else{
+        console.error('不存在')
+      }
+      return true
+    }
+  })
+
+ // ★ 綁定組件生命週期 this 為 renderContext
+  created && created.call(renderContext)
+
+  // 省略 effect 邏輯
+}
+```
+</div>
 
 ---
 layout: center
