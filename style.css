@@ -54,3 +54,7 @@ p {
 img {
   object-fit: contain;
 }
+
+.slidev-icon-btn {
+  aspect-ratio: auto;
+}

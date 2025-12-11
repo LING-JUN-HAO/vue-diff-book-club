@@ -29,6 +29,13 @@ seoMeta:
 
 # Vue3 快速 Diff 算法
 
+<div class="abs-br m-6 text-xl">
+  <a href="https://github.com/vuejs/core/blob/main/packages/runtime-core/src/renderer.ts" target="_blank" class="slidev-icon-btn">
+    <span class="pr-2">快速 diff 原始碼連結(1784 開始)</span>
+    <carbon:logo-github />
+  </a>
+</div>
+
 ---
 
 # 快速 Diff 起源
@@ -227,7 +234,7 @@ function patchKeyedChildren(n1, n2, container) {
 # 中段 diff 處理流程 1 - 確認可以複用的舊子節點
 
 
-- 雙層迴圈遍歷新舊子節點中段區域，找出可以複用的節點，並調用 patch 函數更新內容。
+- 雙層迴圈遍歷舊子節點中段區域，找出可以複用的節點，並調用 patch 函數更新內容。
 
 **時間複雜度 O(n x m) ⇒ O(n^ 2)**
 
