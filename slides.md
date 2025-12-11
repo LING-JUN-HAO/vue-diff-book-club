@@ -2170,9 +2170,148 @@ function onMounted(fn) {
 1. 快速 Diff 如何判斷節點是否需要移動？
 2. keyIndex Map 和 source 在 快速 diff 中各自的作用是什麼？
 3. 為什麼要用 LIS（最長遞增子序列）？什麼情況下使用？
-4. 為什麼組件需要「實例 instance」？
+4. 為什麼組件需要「實例 instance」紀錄上下文資訊？
 5. 為什麼用 Proxy 包裝 instance？
 6. currentInstance 解決了 Vue3 setup 函數什麼問題？
+
+---
+layout: center
+---
+
+# 問題 1：快速 Diff 如何判斷節點是否需要移動？
+
+快速 Diff 透過維護一個 **pos** 變數來判斷節點是否需要移動，這個機制類似於簡單 Diff 的 **lastIndex**。在處理新子節點時，會透過 **keyIndex Map** 查找每個舊節點對應在新列表中的位置索引 **k**。如果當前的 **k < pos**，說明該節點在新列表中的位置比之前處理的節點更靠前，打破了遞增順序，這意味著它需要移動。反之，如果 **k >= pos**，則更新 **pos = k**，該節點保持遞增關係，不需要移動。
+
+<style scope>
+h1{
+  padding-bottom: 1rem;
+  line-height: 1.4;
+}
+
+p{
+  line-height: 2;
+}
+</style>
+
+---
+layout: center
+---
+
+# 問題 2：keyIndex Map 和 source 在 快速 diff 中各自的作用是什麼？
+
+**`keyIndex` 是一個 Map 結構，用於建立新子節點 key 到其索引位置的映射關係**
+- **建立時機**：在處理中間亂序部分之前，先遍歷新子節點建立這個映射
+- **快速查找**：在遍歷舊子節點時，可以 O(1) 時間複雜度快速查找該舊節點在新列表中的位置
+- **判斷存在性**：如果 `keyIndex.get(oldVNode.key)` 返回 `undefined`，說明該舊節點在新列表中不存在，需要卸載
+
+
+`source` 是一個固定長度陣列，長度等於待處理的新子節點數量，用於記錄**新子節點與舊子節點的索引對應關係**
+- **陣列長度**：等於新子節點的數量 `count = newEnd - newStart + 1`
+- **初始值**：填充為 `-1`，表示該新節點是全新的，需要掛載
+- **記錄映射**：`source[k - newStart] = i` 表示新列表位置 `k` 的節點來自舊列表位置 `i`
+- **後續用途**：用於計算 LIS（最長遞增子序列），找出不需要移動的節點
+
+<style scope>
+h1{
+  padding-bottom: 1rem;
+  line-height: 1.4;
+}
+
+p{
+  line-height: 2;
+}
+</style>
+
+---
+layout: center
+---
+
+# 問題 3：為什麼要用 LIS（最長遞增子序列）？什麼情況下使用？
+
+**LIS 最長遞增子序列用於找出不需要移動的最大節點集合，從而最小化 DOM 移動操作**
+
+- 當 `moved = true` 時，表示存在需要移動的節點，但並非所有節點都需要移動
+- 如果新子節點對應的舊節點索引序列是**遞增的**，說明這些節點的相對順序沒有改變，不需要移動
+- LIS 能找出 `source` 陣列中最長的遞增子序列，這些位置的節點保持不動
+- 其餘不在 LIS 中的節點才需要移動，實現**最少移動次數**
+
+<style scope>
+h1{
+  padding-bottom: 1rem;
+  line-height: 1.4;
+}
+
+p{
+  line-height: 2;
+}
+</style>
+
+---
+layout: center
+---
+
+# 問題 4：為什麼組件需要「實例 instance」紀錄上下文資訊？
+
+**組件實例是組件運行時的狀態容器，用於保存組件執行過程中的所有必要資訊**
+
+- **狀態與數據管理**：保存響應式數據（`data`、`props`、`computed`）
+- **生命週期追蹤**：追蹤組件當前所處的生命週期階段
+- **渲染上下文**：提供模板執行所需的 `this` 上下文
+- **依賴追蹤與更新**：記錄哪些數據變化會影響此組件，當數據改變時觸發組件重新渲染
+
+<style scope>
+h1{
+  padding-bottom: 1rem;
+  line-height: 1.4;
+}
+
+p{
+  line-height: 2;
+}
+</style>
+
+---
+layout: center
+---
+
+# 問題 5：為什麼用 Proxy 包裝 instance？
+
+**通過 Proxy 代理組件實例，實現屬性訪問的統一管理**
+
+- **簡化屬性訪問**：直接通過 `this.count` 訪問數據，而不需要 `this.$data.count`
+- **訪問優先級控制**：按照特定順序查找屬性（`props` → `data`），避免屬性名稱衝突
+- **響應式攔截**：在屬性讀取時觸發依賴收集，在屬性設置時觸發更新通知
+- **開發提示**：訪問不存在的屬性時提供警告，嘗試修改 props 時給出錯誤提示
+
+<style scope>
+h1{
+  padding-bottom: 1rem;
+  line-height: 1.4;
+}
+
+p{
+  line-height: 2;
+}
+</style>
+
+---
+layout: center
+---
+
+# 問題 6：currentInstance 解決了 Vue3 setup 函數什麼問題？
+
+**`currentInstance` 用於在 setup 函數執行期間追蹤當前正在初始化的組件實例，讓 `onMounted`、`onUnmounted`、`inject` 等組合式 API 能夠知道應該註冊到哪個組件實例上，確保多個組件同時初始化時不會混淆。**
+
+<style scope>
+h1{
+  padding-bottom: 1rem;
+  line-height: 1.4;
+}
+
+p{
+  line-height: 2;
+}
+</style>
 
 ---
 layout: center
