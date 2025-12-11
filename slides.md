@@ -646,19 +646,12 @@ LIS 最長遞增子序列：在陣列中找出最長的遞增子序列，元素�
 
 [資料來源](https://medium.com/%E6%8A%80%E8%A1%93%E7%AD%86%E8%A8%98/leetcode-%E8%A7%A3%E9%A1%8C%E7%B4%80%E9%8C%84-300-longest-increasing-subsequence-f160358db4d1)
 
----
-layout: cover
----
-
-# 組件的實作原理
-
 
 ---
 
 # 中段 diff 處理流程 3 - 利用 LIS 最小化移動操作
 
 目的：在遍歷新子節點時，保持 LIS 中的節點位置不動，僅移動其他節點到正確位置。
-
 
 <div class="flex overflow-hidden gap-4">
 
@@ -718,6 +711,12 @@ function patchKeyedChildren(n1, n2, container) {
 ![最長遞增子序列比對情形](./public/11-3-2.jpg)
 
 </div>
+
+---
+layout: cover
+---
+
+# 組件的實作原理
 
 ---
 
