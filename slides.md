@@ -1669,9 +1669,8 @@ setup 函數的返回值有兩種可能：
 ```ts
 function mountComponent(vnode, container, anchor = null) {
   // 略過部分代碼
-
   const componentOptions = vnode.type
-  let { render, data, setup } = componentOptions
+  let { render, data, setup, /* 省略其他選項 */ } = componentOptions
   const state = data ? reactive(data()) : null
   const [props, attrs] = resolveProps(propsOption, vnode.props)
 
@@ -1741,6 +1740,116 @@ function mountComponent(vnode, container, anchor = null) {
 }
 ```
 </div>
+
+---
+
+# setupContext emit 事件觸發處理
+
+<div class="flex overflow-hidden gap-4">
+
+
+<div class="w1/2 flex flex-col custom">
+
+- **Template**
+
+```vue
+<template>
+  <MyComponent @change="handler" />
+</template>
+```
+
+- **vnode 定義**
+
+```ts
+const CompVNode = {
+  type: MyComponent,
+  props: {
+    onChange: handler
+  }
+}
+```
+
+</div>
+
+<div class="w1/2 flex flex-col">
+
+- **mountComponent  & resolveProps 處理**
+
+```ts
+function mountComponent(vnode, container, anchor) {
+  const componentOptions = vnode.type
+  let { render, data, setup, /* 省略其他選項 */ } = componentOptions
+  const state = data ? reactive(data()) : null
+  const [props, attrs] = resolveProps(propsOption, vnode.props)
+  
+  const instance = {
+    state,
+    props: shallowReactive(props),
+    isMounted: false,
+    subTree: null
+  }
+  
+  vnode.component = instance
+  
+  // ★ 定義 emit 函數
+  function emit(event, ...payload) {
+    // 將事件名轉換為 props 中的屬性名
+    // 例如: change -> onChange
+    const eventName = `on${event[0].toUpperCase()}${event.slice(1)}`
+    // 在 props 中查找對應的事件處理函數
+    const handler = instance.props[eventName]
+    if (handler) {
+      // 調用事件處理函數並傳遞參數
+      handler(...payload)
+    } else {
+      console.warn(`事件 "${event}" 不存在`)
+    }
+  }
+  
+  // setupContext 的實現
+  const setupContext = { attrs, emit } // 將 emit 函數添加到 setupContext
+  // 省略代碼
+}
+
+// 解析 Props & attr
+function resolveProps(options, propsData){
+	const props = {}
+	const attrs = {}
+	
+	for(const key in propsData){
+    // 判斷是否為 props：
+    // 1.在 props 選項中顯式聲明的屬性
+    // 2. 以 'on' 開頭的事件處理器（如 onClick、onUpdate）。事件處理器統一歸類為 props，無需在 props 選項中聲明。
+    if(key in options || key.startsWith('on')){  
+        props[key] = propsData[key]
+    }else{
+        attrs[key] = propsData[key]
+    }
+	}
+	
+	return [props, attrs]
+}
+
+```
+</div>
+
+</div>
+
+<style scope>
+.slidev-code-wrapper{
+  width: 100%;
+  height: 100%;
+  overflow: auto;
+}
+
+.custom .slidev-code-wrapper{
+  height: auto;
+
+  &:nth-of-type(2){
+    flex: 1;
+  }
+}
+</style>
 
 ---
 layout: center
