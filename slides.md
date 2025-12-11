@@ -30,7 +30,7 @@ seoMeta:
 # Vue3 快速 Diff 算法
 
 <div class="abs-br m-6 text-xl">
-  <a href="https://github.com/vuejs/core/blob/main/packages/runtime-core/src/renderer.ts" target="_blank" class="slidev-icon-btn">
+  <a href="https://github.com/vuejs/core/blob/main/packages/runtime-core/src/renderer.ts#L1784" target="_blank" class="slidev-icon-btn">
     <span class="pr-2">快速 diff 原始碼連結(1784 開始)</span>
     <carbon:logo-github />
   </a>
