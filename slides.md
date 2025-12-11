@@ -2164,6 +2164,17 @@ function onMounted(fn) {
 </style>
 
 ---
+
+# 問題清單
+
+1. 快速 Diff 如何判斷節點是否需要移動？
+2. keyIndex Map 和 source 在 快速 diff 中各自的作用是什麼？
+3. 為什麼要用 LIS（最長遞增子序列）？什麼情況下使用？
+4. 為什麼組件需要「實例 instance」？
+5. 為什麼用 Proxy 包裝 instance？
+6. currentInstance 解決了 Vue3 setup 函數什麼問題？
+
+---
 layout: center
 ---
 
