@@ -29,7 +29,7 @@ seoMeta:
 
 # Vue3 快速 Diff 算法
 
-<div class="abs-br m-6 text-xl">
+<div class="text-xl">
   <a href="https://github.com/vuejs/core/blob/main/packages/runtime-core/src/renderer.ts#L1784" target="_blank" class="slidev-icon-btn">
     <span class="pr-2">快速 diff 原始碼連結(1784 開始)</span>
     <carbon:logo-github />
@@ -529,10 +529,9 @@ function patchKeyedChildren(n1, n2, container) {
 
 <div class="flex overflow-hidden gap-4">
 
+![新子節點掛載的情形](./public/11-3-1.jpg){.custom-img}
 
-![新子節點掛載的情形](./public/11-3-1.jpg)
-
-<div class="flex flex-col gap-3">
+<div class="flex flex-col gap-2">
 
   <v-click>  
 
@@ -546,13 +545,14 @@ function patchKeyedChildren(n1, n2, container) {
 
   **當我們處理完前面的步驟後：**
   - p-1 節點在前置比對中複用，位置不變
-  - p-2 節點在中段處理中複用，索引遞增，不需移動
+  - p-3 & p-4 節點在後置比對中複用，位置不變
+  - p-2 節點在中段處理中卸載，索引遞增，不需移動
 
   </v-click>
 
   <v-click>  
 
-  **★ 但我們遺漏了 p-3 節點！**
+  **★ 但我們遺漏了 p-5 節點！**
 
   </v-click>
 </div>
@@ -563,6 +563,10 @@ function patchKeyedChildren(n1, n2, container) {
 
 .slidev-layout p:has(> img){
   margin: auto;
+}
+
+p:has(.custom-img){
+  height: 100%;
 }
 
 </style>
@@ -623,7 +627,7 @@ function patchKeyedChildren(n1, n2, container) {
 
 </div>
 
-> anchor 是 null，將 p-3 插入新子節點陣列的最後面
+> anchor 是 newend + 1，將 p-5 插入新子節點 p-3 的前面
 
 ---
 
@@ -2279,7 +2283,7 @@ layout: center
 **通過 Proxy 代理組件實例，實現屬性訪問的統一管理**
 
 - **簡化屬性訪問**：直接通過 `this.count` 訪問數據，而不需要 `this.$data.count`
-- **訪問優先級控制**：按照特定順序查找屬性（`props` → `data`），避免屬性名稱衝突
+- **訪問優先級控制**：按照特定順序查找屬性，避免屬性名稱衝突
 - **響應式攔截**：在屬性讀取時觸發依賴收集，在屬性設置時觸發更新通知
 - **開發提示**：訪問不存在的屬性時提供警告，嘗試修改 props 時給出錯誤提示
 
